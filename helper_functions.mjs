@@ -1,8 +1,32 @@
+import CryptoJS from 'crypto-js';
+import dotenv from 'dotenv';
+dotenv.config();
+
+export const encryptPasswordFun = (str) => {
+    return CryptoJS.AES.encrypt(str, process.env.passwordKey).toString();
+}
+
+export const decryptPasswordFun = (str) => {
+    const decrypt = CryptoJS.AES.decrypt(str, process.env.passwordKey);
+    const decryptedText = decrypt.toString(CryptoJS.enc.Utf8);
+    return decryptedText;
+}
+
 
 export const LocalDate = (dateObj) => {
     const receivedDate = dateObj ? new Date(dateObj) : new Date();
     return receivedDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+export const LocalDateTime = () => {
+    const now = new Date();
+    const utcTime = now.getTime();
+    const istOffsetInMilliseconds = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(utcTime + istOffsetInMilliseconds);
+    const localISOTime = istTime.toISOString();
+
+    return localISOTime;
+};
 
 export const LocalDateWithTime = (dateObj) => {
     const receivedDate = dateObj ? new Date(dateObj) : new Date();
@@ -23,7 +47,7 @@ export const UTCDateWithTime = (dateObj) => {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false 
+        hour12: false
     });
 }
 
@@ -344,18 +368,18 @@ export const getPermutations = (arr) => {
     if (arr.length === 1) {
         return [arr];
     }
-    
+
     let permutations = [];
-    
+
     for (let i = 0; i < arr.length; i++) {
         let currentElement = arr[i];
         let remainingElements = arr.slice(0, i).concat(arr.slice(i + 1));
         let remainingPermutations = getPermutations(remainingElements);
-        
+
         for (let perm of remainingPermutations) {
             permutations.push([currentElement, ...perm]);
         }
     }
-    
+
     return permutations;
 }
