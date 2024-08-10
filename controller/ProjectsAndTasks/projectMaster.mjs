@@ -275,6 +275,24 @@ const projectController = () => {
         }
     }
 
+    const getStatusList = async (req, res) => {
+        try {
+            const result = (await new sql.query(`
+                    SELECT Status_Id, Status 
+                    FROM tbl_Status 
+                    WHERE Status_Id!=0  
+                    ORDER BY Status_Id
+                `)).recordset;
+            if (result.length > 0) {
+                return dataFound(res, result)
+            } else {
+                return noData(res)
+            }
+        } catch (e) {
+            return servError(e, res)
+        }
+    }
+
     return {
         getProjectDropDown,
         getProject,
@@ -282,6 +300,7 @@ const projectController = () => {
         editProject,
         deleteProject,
         getProjectAbstract,
+        getStatusList
     }
 }
 

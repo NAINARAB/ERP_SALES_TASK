@@ -44,12 +44,11 @@ const taskTypeControlelr = () => {
         }
 
         try {
-            const result = (await new sql.Request()
+            const result = await new sql.Request()
                 .input('Mode', 1)
                 .input('Task_Type_Id', 0)
                 .input('Task_Type', Task_Type)
                 .execute('Task_Type_SP')
-            ).recordset
 
             if (result.rowsAffected[0] > 0) {
                 success(res, 'Task type added successfully')
@@ -69,12 +68,12 @@ const taskTypeControlelr = () => {
         }
 
         try {
-            const result = (await new sql.Request()
+            const result = await new sql.Request()
                 .input('Mode', 2)
                 .input('Task_Type_Id', Task_Type_Id)
                 .input('Task_Type', Task_Type)
                 .execute('Task_Type_SP')
-            )
+            
 
             if (result.rowsAffected[0] > 0) {
                 success(res, 'Task type updated successfully')

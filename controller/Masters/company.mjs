@@ -19,18 +19,11 @@ const companyControl = () => {
     }
 
     const getCompany = async (req, res) => {
-        const { User_Id, Company_id } = req.query;
-
-        if (isNaN(User_Id) || isNaN(Company_id)) {
-            return invalidInput(res, 'User_Id, Company_id is required');
-        }
+        
         try {
-            const request = new sql.Request();
-            request.input('User_Id', User_Id)
-            request.input('Company_id', Company_id);
-            request.input('Company_name', "");
+            const request = new sql.Request().query('SELECT * FROM tbl_Company_Master WHERE Del_Flag = 0')
 
-            const result = await request.execute('Company_Vw');
+            const result = await request;
 
             if (result.recordset.length > 0) {
                 dataFound(res, result.recordset);

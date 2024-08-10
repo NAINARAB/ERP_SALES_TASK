@@ -8,7 +8,7 @@ const user = () => {
     const getUsers = async (req, res) => {
         const { Company_id } = req.query;
 
-        if (checkIsNumber(Company_id)) {
+        if (!checkIsNumber(Company_id)) {
             return invalidInput(res, 'Company_id is Required')
         }
 
@@ -73,7 +73,7 @@ const user = () => {
                 return failed(res, 'Mobile Number is already exist')
             }
 
-            const request = new sql.Request(SFDB);
+            const request = new sql.Request();
             request.input('Mode', 1);
             request.input('UserId', 0);
             request.input('Name', Name);
@@ -115,7 +115,7 @@ const user = () => {
                 return failed(res, 'Mobile Number is already exist')
             }
 
-            const request = new sql.Request(SFDB);
+            const request = new sql.Request();
             request.input('Mode', 2);
             request.input('UserId', UserId);
             request.input('Name', Name);
@@ -142,7 +142,7 @@ const user = () => {
     const deleteUser = async (req, res) => {
         const { UserId } = req.body;
 
-        if (!UserId) {
+        if (!checkIsNumber(UserId)) {
             return invalidInput(res, 'UserId is required')
         }
 
@@ -173,7 +173,7 @@ const user = () => {
     const userDropdown = async (req, res) => {
         const { Company_id } = req.query;
 
-        if (checkIsNumber(Company_id)) {
+        if (!checkIsNumber(Company_id)) {
             return invalidInput(res, 'Company_id is Required')
         }
 
@@ -197,7 +197,7 @@ const user = () => {
     const employeeDropDown = async (req, res) => {
         const { Company_id } = req.query;
 
-        if (checkIsNumber(Company_id)) {
+        if (!checkIsNumber(Company_id)) {
             return invalidInput(res, 'Company_id is Required')
         }
 
@@ -228,7 +228,7 @@ const user = () => {
     const getSalesPersonDropdown = async (req, res) => {
         const { Company_id } = req.query;
 
-        if (checkIsNumber(Company_id)) {
+        if (!checkIsNumber(Company_id)) {
             return invalidInput(res, 'Company_id is Required')
         }
 
@@ -291,8 +291,6 @@ const user = () => {
             servError(e, res);
         }
     }
-
-
 
     return {
         getUsers,

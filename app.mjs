@@ -9,6 +9,7 @@ import fs from 'fs';
 import { connectDB } from './config/dbconfig.mjs';
 import dotenv from 'dotenv';
 import { listRoutes } from './middleware/apiList.mjs';
+import { failed } from './res.mjs';
 
 dotenv.config();
 
@@ -27,6 +28,15 @@ connectDB();
 
 app.use('/api', indexRouter);
 
+app.use('/api', (req, res) => {
+  try {
+    return listRoutes(app, res)
+  } catch (e) {
+    console.error(e);
+    return failed(res, 'Failed to list routes')
+  }
+})
+
 const reactBuildPath = path.join(__dirname, 'frontend');
 app.use(express.static(reactBuildPath));
 
@@ -39,9 +49,6 @@ app.use('/imageURL/inwardActivity', express.static(inwardActivity));
 app.get('*', (req, res) => {
   res.sendFile(path.join(reactBuildPath, 'index.html'));
 });
-
-const routes = listRoutes(app);
-console.table(routes);
 
 const PORT = process.env.PORT || 9001;
 app.listen(PORT, () => {
