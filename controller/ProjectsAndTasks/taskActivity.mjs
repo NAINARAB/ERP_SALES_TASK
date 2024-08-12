@@ -134,6 +134,53 @@ const TaskActivity = () => {
         }
     }
 
+    const getWorkedDetailsForTask = async (req, res) => {
+        const { Task_Levl_Id } = req.query;
+
+        if (!checkIsNumber(Task_Levl_Id)) {
+            return invalidInput(res, 'Task_Levl_Id is required')
+        }
+
+        try {
+            const query = `
+            SELECT
+                wm.*,
+                t.Task_Name,
+                u.Name AS EmployeeName,
+                s.Status AS WorkStatus,
+
+                COALESCE(
+                    (SELECT Timer_Based FROM tbl_Task_Details WHERE AN_No = wm.AN_No), 
+                    0
+                ) AS Timer_Based
+                
+            FROM 
+                tbl_Work_Master AS wm
+            LEFT JOIN 
+                tbl_Task AS t ON t.Task_Id = wm.Task_Id
+            LEFT JOIN
+                tbl_Users AS u ON u.UserId = wm.Emp_Id
+            LEFT JOIN
+                tbl_Status AS s ON s.Status_Id = wm.Work_Status
+                
+            WHERE 
+				wm.Task_Levl_Id = @Task_Levl_Id
+                
+            ORDER BY 
+                wm.Start_Time`
+
+            const result = await new sql.Request().input('Task_Levl_Id', Task_Levl_Id).query(query);
+
+            if (result.recordset.length > 0) {
+                dataFound(res, result.recordset)
+            } else {
+                noData(res)
+            }
+        } catch (e) {
+            servError(e, res)
+        }
+    }
+
     const getTaskAssignedUsers = async (req, res) => {
 
         const { Company_id } = req.query;
@@ -170,10 +217,36 @@ const TaskActivity = () => {
         }
     }
 
+    const getAssignedTasks = async (req, res) => {
+        try {
+            const query = `
+            SELECT
+                td.Task_Id,
+                t.Task_Name
+            FROM
+                tbl_Work_Master AS td
+                LEFT JOIN tbl_Task AS t
+                ON t.Task_Id = td.Task_Id
+            GROUP BY
+                td.Task_Id,
+                t.Task_Name`;
+
+            const result = await sql.query(query);
+
+            if (result.recordset.length > 0) {
+                dataFound(res, result.recordset)
+            } else {
+                noData(res)
+            }
+        } catch (e) {
+            servError(e, res)
+        }
+    }
+
     const getFilteredUsersBasedOnTasks = async (req, res) => {
         const { Task_Id } = req.query;
 
-        if (!Task_Id) {
+        if (!checkIsNumber(Task_Id)) {
             return invalidInput(res, 'Task_Id is required');
         }
 
@@ -207,39 +280,14 @@ const TaskActivity = () => {
         }
     }
 
-    const getAssignedTasks = async (req, res) => {
-        try {
-            const query = `
-            SELECT
-                td.Task_Id,
-                t.Task_Name
-            FROM
-                tbl_Work_Master AS td
-                LEFT JOIN tbl_Task AS t
-                ON t.Task_Id = td.Task_Id
-            GROUP BY
-                td.Task_Id,
-                t.Task_Name`;
-
-            const result = await sql.query(query);
-
-            if (result.recordset.length > 0) {
-                dataFound(res, result.recordset)
-            } else {
-                noData(res)
-            }
-        } catch (e) {
-            servError(e, res)
-        }
-    }
-
     return {
-        getTaskAssignedUsers,
-        getFilteredUsersBasedOnTasks,
-        getAssignedTasks,
         getEmployeeAssignedInTheTask,
         assignTaskForEmployee,
-        modifyTaskAssignedForEmployee, 
+        modifyTaskAssignedForEmployee,
+        getWorkedDetailsForTask, 
+        getTaskAssignedUsers,
+        getAssignedTasks,
+        getFilteredUsersBasedOnTasks,
     }
 }
 

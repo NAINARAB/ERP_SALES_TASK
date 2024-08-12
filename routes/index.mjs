@@ -17,7 +17,7 @@ indexRouter.use('/dashboard', DashboardRouter);
 indexRouter.use('/dataEntry', dataEntryRouter);
 indexRouter.use('/discussionForum', TopicsRouter);
 indexRouter.use('/masters', MastersRouter);
-indexRouter.use('/projects', projectRoute);
+indexRouter.use('/taskManagement', projectRoute);
 indexRouter.use('/userModule', UserModule);
 
 export default indexRouter;

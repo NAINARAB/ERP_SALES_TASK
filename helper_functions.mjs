@@ -13,6 +13,12 @@ export const decryptPasswordFun = (str) => {
 }
 
 
+export const isValidDate = (dateString) => {
+    const timestamp = Date.parse(dateString);
+    return !isNaN(timestamp);
+}
+
+
 export const LocalDate = (dateObj) => {
     const receivedDate = dateObj ? new Date(dateObj) : new Date();
     return receivedDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })

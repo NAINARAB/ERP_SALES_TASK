@@ -4,6 +4,94 @@ import { dataFound, noData, success, failed, servError, invalidInput } from '../
 
 const EmployeeAndTasks = () => {
 
+    const getTaskStartTime = async (req, res) => {
+        const { Emp_Id } = req.query;
+
+        if (!checkIsNumber(Emp_Id)) {
+            return invalidInput(res, 'Emp_Id is required');
+        }
+
+        try {
+            const result = await new sql.Request()
+                .input('Emp_Id', Emp_Id)
+                .query(`SELECT TOP (1) * FROM tbl_Task_Start_Time WHERE Emp_Id = @Emp_Id`);
+
+            if (result.recordset.length > 0) {
+                return dataFound(res, result.recordset)
+            } else {
+                return failed(res, 'no data');
+            }
+        } catch (e) {
+            servError(e, res);
+        }
+    }
+
+    const postStartTime = async (req, res) => {
+        const { Emp_Id, Time, Task_Id, ForcePost } = req.body;
+
+        if (!checkIsNumber(Emp_Id) || !checkIsNumber(Task_Id) || !Time) {
+            return invalidInput(res, 'Emp_Id, Time, Task_Id is required')
+        }
+
+        try {
+            const checkResult = await new sql.Request()
+                .input('Emp_Id', Emp_Id)
+                .query(`SELECT * FROM tbl_Task_Start_Time WHERE Emp_Id = @Emp_Id;`);
+
+            if (checkResult.recordset.length > 0 && ForcePost === 0) {
+                return failed(res, 'Previous Task is Not Completed')
+            } else {
+                const insertTask = `
+                INSERT INTO 
+                    tbl_Task_Start_Time 
+                    (Emp_Id, Time, Task_Id) 
+                VALUES 
+                    (@emp, @time, @taskid)`;
+                const request = new sql.Request();
+                request.input('emp', Emp_Id)
+                request.input('time', Time)
+                request.input('taskid', Task_Id)
+                const result = await request.query(insertTask);
+
+                if (result.rowsAffected.length > 0) {
+                    return dataFound(res, [], 'Task started')
+                } else {
+                    return failed(res, 'Failed to start Task')
+                }
+            }
+        } catch (e) {
+            servError(e, res)
+        }
+    }
+
+    const deleteTaskTime = async (req, res) => {
+        const { Emp_Id, Mode } = req.body;
+
+        if (!checkIsNumber(Emp_Id)) {
+            return invalidInput(res, 'Emp_Id is required')
+        }
+
+        try {
+            if (Number(Mode) === 1) {
+                const result = await new sql.Request()
+                    .input('Emp_Id', Emp_Id)
+                    .query(`DELETE FROM tbl_Task_Start_Time WHERE Emp_Id = @Emp_Id;`);
+
+                if (result.rowsAffected.length > 0) {
+                    return success(res, 'Task cancelled')
+                } else {
+                    return failed(res, 'Failed to cancel')
+                }
+            } else {
+                return failed(res, 'Failed to Save')
+            }
+
+
+        } catch (e) {
+            return servError(e, res)
+        }
+    }
+
     const getMyTasks = async (req, res) => {
         const { Emp_Id, reqDate } = req.query;
 
@@ -90,9 +178,9 @@ const EmployeeAndTasks = () => {
             WHERE 
                 td.Emp_Id = @emp
             AND 
-                CONVERT(DATE, td.Est_Start_Dt) <= @date
+                CONVERT(DATE, td.Est_Start_Dt) <= CONVERT(DATE, @date)
             AND
-                CONVERT(DATE, td.Est_End_Dt) >= @date
+                CONVERT(DATE, td.Est_End_Dt) >= CONVERT(DATE, @date)
             ORDER BY 
                 CONVERT(TIME, td.Sch_Time, 108)`
 
@@ -113,11 +201,47 @@ const EmployeeAndTasks = () => {
         }
     }
 
-    
+    const EmployeeTaskDropDown = async (req, res) => {
+        const { Emp_Id } = req.query;
+
+        if (!checkIsNumber(Emp_Id)) {
+            return invalidInput(res, 'Emp_Id is Required');
+        }
+
+        try {
+            const query = `
+            SELECT 
+            	DISTINCT(wm.Task_Id),
+            	COALESCE(t.Task_Name, 'unknown task') AS Task_Name
+            FROM
+            	tbl_Task_Details AS wm
+            	LEFT JOIN tbl_Task AS t
+            	ON t.Task_Id = wm.Task_Id
+            WHERE
+            	wm.Emp_Id = @emp`;
+
+            const request = new sql.Request();
+            request.input('emp', sql.BigInt, Emp_Id);
+
+            const result = await request.query(query);
+
+            if (result.recordset.length > 0) {
+                dataFound(res, result.recordset)
+            } else {
+                noData(res)
+            }
+        } catch (e) {
+            servError(e, res);
+        }
+    }
 
     return {
+        getTaskStartTime,
+        postStartTime,
+        deleteTaskTime,
         getMyTasks,
         todayTasks,
+        EmployeeTaskDropDown,
     }
 }
 
