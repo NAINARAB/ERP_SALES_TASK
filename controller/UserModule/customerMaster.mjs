@@ -1,10 +1,7 @@
 import sql from 'mssql'
-import crypto from 'crypto'
 import { servError, dataFound, noData, success, failed, invalidInput } from '../../res.mjs';
+import { checkIsNumber } from '../../helper_functions.mjs';
 
-function md5Hash(input) {
-    return crypto.createHash('md5').update(input).digest('hex');
-}
 
 const CustomerMaster = () => {
 
@@ -27,7 +24,7 @@ const CustomerMaster = () => {
                 LEFT JOIN tbl_Customer_Master cus1
                     ON cus.Under_Id = cus1.Cust_Id
                 ORDER BY cus.Customer_name ASC`;
-    
+
             const result = await sql.query(customerGet)
             if (result && result.recordset.length > 0) {
                 dataFound(res, result.recordset);
@@ -40,107 +37,114 @@ const CustomerMaster = () => {
     }
 
     const postCustomer = async (req, res) => {
-        const { data } = req.body;
-        const md5Password = md5Hash('123456');
-    
-        if (!data || typeof data !== 'object') {
-            return invalidInput(res, 'data is required');
+        const {
+            Customer_name, Contact_Person, Mobile_no, Email_Id, Branch_Id, Gstin, User_Type_Id,
+            Address1, Address2, Address3, Address4, Pincode, State, Country, Under_Id, Entry_By
+        } = req.body;
+
+        if (!Customer_name || !Contact_Person || !Mobile_no || !checkIsNumber(Branch_Id) || !checkIsNumber(User_Type_Id)) {
+            return invalidInput(res, 'Customer_name, Contact_Person, Mobile_no, Branch_Id, User_Type_Id is required');
         }
-    
+
         try {
-    
-            if (data.Gstin) {
-                const queryCheckGstin = `
-                SELECT 
-                    COUNT(*) AS count 
-                FROM 
-                    tbl_Customer_Master 
-                WHERE 
-                    Gstin = '${data?.Gstin}'`;
-                const GstResult = await sql.query(queryCheckGstin);
-    
-                if (GstResult.recordset[0].count > 0) {
-                    return failed(res, 'Gstin is Already Exists');
-                }
-            }
-    
-    
-            const checkmobile = `SELECT UserName from tbl_Users WHERE UserName = '${data?.Mobile_no}' AND UDel_Flag = 0`;
-            const checkResult = await sql.query(checkmobile);
-    
+
+            // if (Gstin) {
+            //     const GstResult = await new sql.Request()
+            //         .input('Gstin', Gstin)
+            //         .query( `SELECT COUNT(*) AS count FROM tbl_Customer_Master WHERE Gstin = @Gstin`);
+
+            //     if (GstResult.recordset[0].count > 0) {
+            //         return failed(res, 'Gstin is Already Exists');
+            //     }
+            // }
+            const checkResult = await new sql.Request()
+                .input('Mobile_no', Mobile_no)
+                .query(`SELECT UserName from tbl_Users WHERE UserName = @Mobile_no AND UDel_Flag = 0`);
+
             if (checkResult.recordset.length > 0) {
                 return failed(res, 'Mobile Number Already Exists');
             }
-    
-            const newuser = new sql.Request();
-            newuser.input('Mode', 1);
-            newuser.input('UserId', 0);
-            newuser.input('Name', data.Customer_name);
-            newuser.input('UserName', data.Mobile_no);
-            newuser.input('UserTypeId', data.User_Type_Id);
-            newuser.input('Password', md5Password);
-            newuser.input('BranchId', 0);
-            newuser.input('Company_Id', 0);
-    
-            const result = await newuser.execute('UsersSP');
-    
-            if (result.recordset.length > 0) {
-                const createdUserId = result.recordset[0][''];
-    
-                const getMaxCustIdQuery = 'SELECT ISNULL(MAX(Cust_Id), 0) + 1 AS NextCustId FROM tbl_Customer_Master';
-                const maxCustIdResult = await sql.query(getMaxCustIdQuery);
-                const nextCustId = maxCustIdResult.recordset[0].NextCustId;
-    
-    
-                let zeros;
-                if (createdUserId < 10) {
-                    zeros = '000';
-                } else if (createdUserId < 100) {
-                    zeros = '00';
-                } else if (createdUserId < 1000) {
-                    zeros = '0';
-                }
-                const Cust_No = data.Branch_Id + zeros + nextCustId
-    
-                const newCustomer = new sql.Request();
-    
-                const insertCustomer = `INSERT INTO tbl_Customer_Master 
-                        (Cust_Id, Cust_No, Customer_name, Contact_Person, Mobile_no, Email_Id, Address1, 
-                        Address2, Address3, Address4, Pincode, State, Country, Gstin, Under_Id, User_Mgt_Id, 
-                        User_Type_Id, Entry_By, Entry_Date)
+
+            const getCompany = (await new sql.Request()
+                .input('branch', Branch_Id)
+                .query(`SELECT COALESCE(Company_id, 0) FROM tbl_Branch_Master WHERE BranchId = @branch`)
+            ).recordset[0].Company_id;
+
+            if (!checkIsNumber(getCompany) || getCompany === 0) {
+                return failed(res, 'Invalid Branch')
+            }
+
+            const transaction = await new sql.Transaction().begin();
+
+            try {
+                const newuser = new sql.Request(transaction)
+                newuser.input('Mode', 1);
+                newuser.input('UserId', 0);
+                newuser.input('Name', Customer_name);
+                newuser.input('UserName', Mobile_no);
+                newuser.input('UserTypeId', User_Type_Id);
+                newuser.input('Password', '123456');
+                newuser.input('BranchId', Branch_Id);
+                newuser.input('Company_Id', getCompany);
+
+                const result = await newuser.execute('UsersSP');
+
+                if (result.rowsAffected[0] > 0 && result.recordset.length > 0) {
+                    const createdUserId = result.recordset[0][''];
+
+                    const getMaxCustIdQuery = 'SELECT ISNULL(MAX(Cust_Id), 0) + 1 AS NextCustId FROM tbl_Customer_Master';
+                    const maxCustIdResult = await sql.query(getMaxCustIdQuery);
+                    const nextCustId = maxCustIdResult.recordset[0].NextCustId;
+
+
+                    let zeros = String(nextCustId).padStart(4, '0');
+
+                    const Cust_No = Branch_Id + '_' + zeros
+
+                    const newCustomer = new sql.Request(transaction)
+                        .input('Cust_Id', nextCustId)
+                        .input('Cust_No', Cust_No)
+                        .input('Customer_name', Customer_name)
+                        .input('Contact_Person', Contact_Person)
+                        .input('Mobile_no', Mobile_no)
+                        .input('Email_Id', Email_Id)
+                        .input('Address1', Address1)
+                        .input('Address2', Address2)
+                        .input('Address3', Address3)
+                        .input('Address4', Address4)
+                        .input('Pincode', Pincode)
+                        .input('State', State)
+                        .input('Country', Country)
+                        .input('Gstin', Gstin)
+                        .input('Under_Id', Under_Id)
+                        .input('User_Mgt_Id', createdUserId)
+                        .input('User_Type_Id', User_Type_Id)
+                        .input('Entry_By', Entry_By)
+                        .query(`
+                        INSERT INTO tbl_Customer_Master 
+                            (Cust_Id, Cust_No, Customer_name, Contact_Person, Mobile_no, Email_Id, Address1, 
+                            Address2, Address3, Address4, Pincode, State, Country, Gstin, Under_Id, User_Mgt_Id, 
+                            User_Type_Id, Entry_By, Entry_Date)
                         VALUES 
-                        (@Cust_Id, @Cust_No, @Customer_name, @Contact_Person, @Mobile_no, @Email_Id, @Address1, 
-                        @Address2, @Address3, @Address4, @Pincode, @State, @Country, @Gstin, @Under_Id, @User_Mgt_Id, @User_Type_Id, 
-                        @Entry_By, GETDATE())`;
-    
-    
-                newCustomer.input('Cust_Id', nextCustId);
-                newCustomer.input('Cust_No', Cust_No);
-                newCustomer.input('Customer_name', data.Customer_name);
-                newCustomer.input('Contact_Person', data.Contact_Person);
-                newCustomer.input('Mobile_no', data.Mobile_no);
-                newCustomer.input('Email_Id', data.Email_Id);
-                newCustomer.input('Address1', data.Address1);
-                newCustomer.input('Address2', data.Address2);
-                newCustomer.input('Address3', data.Address3);
-                newCustomer.input('Address4', data.Address4);
-                newCustomer.input('Pincode', data.Pincode);
-                newCustomer.input('State', data.State);
-                newCustomer.input('Country', data.Country);
-                newCustomer.input('Gstin', data.Gstin);
-                newCustomer.input('Under_Id', data.Under_Id);
-                newCustomer.input('User_Mgt_Id', createdUserId);
-                newCustomer.input('User_Type_Id', data.User_Type_Id);
-                newCustomer.input('Entry_By', data.Entry_By);
-    
-                const cuctomerCreateResult = await newCustomer.query(insertCustomer);
-                if (cuctomerCreateResult.rowsAffected[0] > 0) {
-                    success(res, 'Customer created successfully');
+                            (@Cust_Id, @Cust_No, @Customer_name, @Contact_Person, @Mobile_no, @Email_Id, @Address1, 
+                            @Address2, @Address3, @Address4, @Pincode, @State, @Country, @Gstin, @Under_Id, @User_Mgt_Id, @User_Type_Id, 
+                            @Entry_By, GETDATE()); `)
+
+                    const cuctomerCreateResult = await newCustomer;
+                    if (cuctomerCreateResult.rowsAffected[0] > 0) {
+                        await transaction.commit();
+                        success(res, 'Customer created successfully');
+                    } else {
+                        await transaction.rollback();
+                        failed(res, 'Customer Creation Failed')
+                    }
                 } else {
-                    failed(res, 'Customer Creation Failed')
+                    await transaction.rollback();
+                    failed(res, 'User Creation Failed');
                 }
-            } else {
-                failed(res, 'User Creation Failed');
+            } catch (er) {
+                await transaction.rollback();
+                servError(er, res);
             }
         } catch (e) {
             servError(e, res);
@@ -148,110 +152,121 @@ const CustomerMaster = () => {
     }
 
     const editCustomer = async (req, res) => {
-        const { data } = req.body;
-    
-        if (!data || typeof data !== 'object') {
-            return invalidInput(res, 'data is required');
+
+        const {
+            Cust_Id, Customer_name, Contact_Person, Mobile_no, Email_Id, Branch_Id, Gstin, User_Type_Id,
+            Address1, Address2, Address3, Address4, Pincode, State, Under_Id, User_Mgt_Id
+        } = req.body;
+
+        if (!Customer_name || !Contact_Person || !Mobile_no || !checkIsNumber(Branch_Id) || !checkIsNumber(User_Type_Id)) {
+            return invalidInput(res, 'Customer_name, Contact_Person, Mobile_no, Branch_Id, User_Type_Id is required');
         }
-    
+
         try {
-            
-            if (data.Gstin) {
-                const queryCheckGstin = `
-                SELECT 
-                    COUNT(*) AS count 
-                FROM 
-                    tbl_Customer_Master 
-                WHERE 
-                    Gstin = '${data?.Gstin}' 
-                    AND 
-                    Cust_Id != '${data?.Cust_Id}'`;
-    
-                const GstResult = await sql.query(queryCheckGstin);
-                
-                if (GstResult.recordset[0].count > 0) {
-                    return failed(res, 'Gstin is Already Exists');
-                }
-    
-            }
-    
-            const checkmobile = `
-            SELECT 
-                UserName 
-            FROM 
-                tbl_Users 
-            WHERE 
-                UserName = '${data?.Mobile_no}' AND 
-                UDel_Flag = 0 AND 
-                UserId != '${data.User_Mgt_Id}'`;
-            const checkResult = await sql.query(checkmobile);
-    
+
+            // if (Gstin) {
+            //     const GstResult = await new sql.Request()
+            //         .input('Gstin', Gstin)
+            //         .input('Cust_Id', Cust_Id)
+            //         .query( `SELECT COUNT(*) AS count FROM tbl_Customer_Master WHERE Gstin = @Gstin AND Cust_Id != @Cust_Id`);
+
+            //     if (GstResult.recordset[0].count > 0) {
+            //         return failed(res, 'Gstin is Already Exists');
+            //     }
+            // }
+
+            const checkResult = await new sql.Request()
+                .input('Mobile_no', Mobile_no)
+                .input('UserId', User_Mgt_Id)
+                .query(`SELECT UserName FROM tbl_Users WHERE UserName = @Mobile_no AND UDel_Flag = 0 AND UserId != @UserId; `);
+
             if (checkResult.recordset.length > 0) {
                 return failed(res, 'Mobile Number Already Exists');
             }
-    
-            const selectPassword = `SELECT Password from tbl_Users WHERE UserId = '${data.User_Mgt_Id}'`;
-            const passwordResult = await sql.query(selectPassword);
-            const Password = passwordResult.recordset[0].Password;
-    
-            const newuser = new sql.Request();
-            newuser.input('Mode', 2);
-            newuser.input('UserId', data.User_Mgt_Id);
-            newuser.input('Name', data.Customer_name);
-            newuser.input('UserName', data.Mobile_no);
-            newuser.input('UserTypeId', data.User_Type_Id);
-            newuser.input('Password', Password);
-            newuser.input('BranchId', 0);
-            newuser.input('Company_Id', 0);
 
-    
-            const result = await newuser.execute('UsersSP');
-    
-            if (result.recordset.length > 0) {
-    
-                const updateCustomerQuery = `
-                    UPDATE tbl_Customer_Master 
-                    SET 
-                        Customer_name = @Customer_name,
-                        Mobile_no = @Mobile_no,
-                        User_Type_Id = @UserTypeId,
-                        Contact_Person = @Contact_Person,
-                        Email_Id = @Email_Id,
-                        Gstin = @Gstin,
-                        Under_Id = @UnderId,
-                        Pincode = @Pincode,
-                        State = @State,
-                        Address1 = @Address1,
-                        Address2 = @Address2,
-                        Address3 = @Address3,
-                        Address4 = @Address4
-                    WHERE Cust_Id = @Cust_Id`;
-    
-                const newCustomer = new sql.Request();
-                newCustomer.input('Customer_name', data.Customer_name);
-                newCustomer.input('Mobile_no', data.Mobile_no);
-                newCustomer.input('UserTypeId', data.User_Type_Id);
-                newCustomer.input('Contact_Person', data.Contact_Person);
-                newCustomer.input('Email_Id', data.Email_Id);
-                newCustomer.input('Gstin', data.Gstin);
-                newCustomer.input('UnderId', data.Under_Id);
-                newCustomer.input('Pincode', data.Pincode);
-                newCustomer.input('State', data.State);
-                newCustomer.input('Address1', data.Address1);
-                newCustomer.input('Address2', data.Address2);
-                newCustomer.input('Address3', data.Address3);
-                newCustomer.input('Address4', data.Address4);
-                newCustomer.input('Cust_Id', data.Cust_Id);
-    
-                const cuctomerUpdateResult = await newCustomer.query(updateCustomerQuery);
-                if (cuctomerUpdateResult.rowsAffected[0] > 0) {
-                    success(res, 'Changes Saved');
+            const passwordResult = await new sql.Request()
+                .input('User_Mgt_Id', User_Mgt_Id)
+                .query('SELECT Password from tbl_Users WHERE UserId = @User_Mgt_Id');
+
+            const Password = passwordResult.recordset[0].Password;
+
+            const getCompany = (await new sql.Request()
+                .input('branch', Branch_Id)
+                .query(`SELECT COALESCE(Company_id, 0) FROM tbl_Branch_Master WHERE BranchId = @branch`)
+            ).recordset[0].Company_id;
+
+            if (!checkIsNumber(getCompany) || getCompany === 0) {
+                return failed(res, 'Invalid Branch')
+            }
+
+            const transaction = await new sql.Transaction().begin();
+
+            try {
+                const newuser = new sql.Request(transaction)
+                    .input('Mode', 2)
+                    .input('UserId', User_Mgt_Id)
+                    .input('Name', Customer_name)
+                    .input('UserName', Mobile_no)
+                    .input('UserTypeId', User_Type_Id)
+                    .input('Password', Password)
+                    .input('BranchId', Branch_Id)
+                    .input('Company_Id', getCompany)
+                    .execute('UsersSP')
+
+                const result = await newuser;
+
+                if (result.recordset.length > 0) {
+
+                    const newCustomer = new sql.Request(transaction)
+                        .input('Customer_name', Customer_name)
+                        .input('Mobile_no', Mobile_no)
+                        .input('UserTypeId', User_Type_Id)
+                        .input('Contact_Person', Contact_Person)
+                        .input('Email_Id', Email_Id)
+                        .input('Gstin', Gstin)
+                        .input('UnderId', Under_Id)
+                        .input('Pincode', Pincode)
+                        .input('State', State)
+                        .input('Address1', Address1)
+                        .input('Address2', Address2)
+                        .input('Address3', Address3)
+                        .input('Address4', Address4)
+                        .input('Cust_Id', Cust_Id)
+                        .query(`
+                            UPDATE tbl_Customer_Master 
+                            SET 
+                                Customer_name = @Customer_name,
+                                Mobile_no = @Mobile_no,
+                                User_Type_Id = @UserTypeId,
+                                Contact_Person = @Contact_Person,
+                                Email_Id = @Email_Id,
+                                Gstin = @Gstin,
+                                Under_Id = @UnderId,
+                                Pincode = @Pincode,
+                                State = @State,
+                                Address1 = @Address1,
+                                Address2 = @Address2,
+                                Address3 = @Address3,
+                                Address4 = @Address4
+                            WHERE Cust_Id = @Cust_Id`);
+
+                    const cuctomerUpdateResult = await newCustomer;
+
+                    if (cuctomerUpdateResult.rowsAffected[0] > 0) {
+                        await transaction.commit();
+                        success(res, 'Changes Saved');
+                    } else {
+                        await transaction.rollback();
+                        failed(res, 'Failed to Save');
+                    }
+
                 } else {
-                    failed(res, 'Failed to Save');
+                    await transaction.rollback();
+                    failed(res, 'User Update Failed');
                 }
-    
-            } else {
-                failed(res, 'User Update Failed');
+            } catch (er) {
+                await transaction.rollback();
+                servError(er, res);
             }
         } catch (e) {
             servError(e, res);
@@ -262,19 +277,20 @@ const CustomerMaster = () => {
         const { UserId } = req.query;
 
         try {
-            if (!UserId) {
+            if (!checkIsNumber(UserId)) {
                 return invalidInput(res, 'UserId is Required');
             }
-    
-            const checkCustomer = `SELECT Cust_Id FROM tbl_Customer_Master WHERE User_Mgt_Id = '${UserId}'`;
-            const result = await sql.query(checkCustomer);
-    
+
+            const result = await new sql.Request()
+                .input('UserId', UserId)
+                .query(`SELECT Cust_Id FROM tbl_Customer_Master WHERE User_Mgt_Id = @UserId`);
+
             if (result.recordset.length === 0) {
                 res.status(200).json({ data: [], success: false, message: 'Not a Customer', isCustomer: false });
             } else {
                 res.status(200).json({ data: result.recordset, success: true, message: 'Customer Found', isCustomer: true });
             }
-    
+
         } catch (e) {
             servError(e, res);
         }
@@ -292,7 +308,7 @@ const CustomerMaster = () => {
         try {
             // const result = await sql.query(`SELECT * FROM tbl_Bank_Details WHERE isActive = 1 AND Company_Id = '${CompanyId}'`);
             const result = await sql.query(`SELECT * FROM tbl_Bank_Details WHERE isActive = 1`);
-            
+
             if (result.recordset.length) {
                 dataFound(res, result.recordset);
             } else {

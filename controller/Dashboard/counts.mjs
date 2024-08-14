@@ -2,7 +2,6 @@ import sql from 'mssql'
 import { servError, dataFound, noData, invalidInput } from '../../res.mjs';
 
 
-
 const DashboardController = () => {
 
     const getDashboardData = async (req, res) => {

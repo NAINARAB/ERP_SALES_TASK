@@ -54,4 +54,4 @@ const dbconnect = async (req, res, next) => {
   }
 };
 
-module.exports =  dbconnect
+export default dbconnect;

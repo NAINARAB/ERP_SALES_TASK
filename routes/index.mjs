@@ -8,6 +8,7 @@ import TopicsRouter from './discussionForem.mjs';
 import MastersRouter from './masters.mjs';
 import projectRoute from './projectsAndTasks.mjs';
 import UserModule from './userModule.mjs';
+import ReportRouter from './reports.mjs';
 
 const indexRouter = express.Router();
 
@@ -18,6 +19,7 @@ indexRouter.use('/dataEntry', dataEntryRouter);
 indexRouter.use('/discussionForum', TopicsRouter);
 indexRouter.use('/masters', MastersRouter);
 indexRouter.use('/taskManagement', projectRoute);
+indexRouter.use('/reports', ReportRouter)
 indexRouter.use('/userModule', UserModule);
 
 export default indexRouter;

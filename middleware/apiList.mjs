@@ -74,13 +74,14 @@ export function listRoutes(app, res) {
   </head>
   
   <body class="p-3">
-    <h2 class="text-dark">SMT APIs</h2>
+    <h2 class="text-dark">SMT APIs (${(routes?.length - 1) ?? 0})</h2>
     <table class="table border display">
       <thead>
         <tr>
           <th class="text-center border tble-hed-stick">SNo</th>
           <th class="text-center border tble-hed-stick">Module</th>
           <th class="text-center border tble-hed-stick">Expand</th>
+          <th class="text-center border tble-hed-stick">APIs Count</th>
         </tr>
       </thead>
       <tbody>
@@ -96,9 +97,10 @@ export function listRoutes(app, res) {
               style="font-size: 20px;"
             >+</button>
           </td>
+          <td class="border text-muted fw-bold">${group?.apiList?.length ?? 0}</td>
         </tr>
         <tr id="collapseRow${groupIndex}" class="collapse-row" style="display: none;">
-          <td colspan='3' class="px-3">
+          <td colspan='4' class="px-3 bg-light">
             <table class="table my-3">
               <thead>
                 <tr>

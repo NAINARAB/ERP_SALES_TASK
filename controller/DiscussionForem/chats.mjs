@@ -215,15 +215,15 @@ const ChatController = () => {
         }
 
         try {
-            const request = new sql.Request();
-            request.input('fileid', FileId);
-            const result = await request.query(`
-                SELECT 
-                    File_Name, FIle_Path 
-                FROM 
-                    tbl_Discussion_Files 
-                WHERE 
-                    Id = @fileid`);
+            const result = await new sql.Request()
+                .input('fileid', FileId)
+                .query(`
+                    SELECT 
+                        File_Name, FIle_Path 
+                    FROM 
+                        tbl_Discussion_Files 
+                    WHERE 
+                        Id = @fileid`);
 
             if (result.recordset.length > 0) {
                 const { File_Name, FIle_Path } = result.recordset[0];
